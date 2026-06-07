@@ -1,0 +1,236 @@
+<main class="shell">
+  <section class="hero">
+    <div>
+      <p class="eyebrow">Angular productivity workspace</p>
+      <h1>TaskFlow Todo</h1>
+      <p class="intro">
+        A resume-ready Angular todo app with signal-based state, local persistence, filtering,
+        priorities, due dates, tags, and responsive UI.
+      </p>
+    </div>
+
+    <div class="hero-panel" aria-label="Project progress summary">
+      <span class="hero-panel__label">Completion</span>
+      <strong>{{ stats().completionRate }}%</strong>
+      <div class="progress">
+        <span [style.width.%]="stats().completionRate"></span>
+      </div>
+      <small>{{ stats().completed }} of {{ stats().total }} tasks done</small>
+    </div>
+  </section>
+
+  <section class="stats-grid" aria-label="Task statistics">
+    <article>
+      <span>Total</span>
+      <strong>{{ stats().total }}</strong>
+    </article>
+    <article>
+      <span>Active</span>
+      <strong>{{ stats().active }}</strong>
+    </article>
+    <article>
+      <span>Due today</span>
+      <strong>{{ stats().dueToday }}</strong>
+    </article>
+    <article>
+      <span>Overdue</span>
+      <strong>{{ stats().overdue }}</strong>
+    </article>
+  </section>
+
+  <section class="workspace" aria-label="Todo manager">
+    <form class="task-form" (ngSubmit)="submitTodo()">
+      <div class="section-heading">
+        <p>{{ editingId() ? 'Edit selected task' : 'Create task' }}</p>
+        @if (editingId()) {
+          <button class="ghost-button" type="button" (click)="cancelEdit()">Cancel edit</button>
+        }
+      </div>
+
+      <label>
+        <span>Task title</span>
+        <input
+          type="text"
+          name="title"
+          placeholder="Design dashboard interactions"
+          [ngModel]="draft().title"
+          (ngModelChange)="updateDraft('title', $event)"
+          required
+        />
+      </label>
+
+      <label>
+        <span>Description</span>
+        <textarea
+          name="description"
+          rows="4"
+          placeholder="Add context, acceptance criteria, or notes"
+          [ngModel]="draft().description"
+          (ngModelChange)="updateDraft('description', $event)"
+        ></textarea>
+      </label>
+
+      <div class="form-grid">
+        <label>
+          <span>Priority</span>
+          <select
+            name="priority"
+            [ngModel]="draft().priority"
+            (ngModelChange)="updateDraft('priority', $event)"
+          >
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+
+        <label>
+          <span>Due date</span>
+          <input
+            type="date"
+            name="dueDate"
+            [ngModel]="draft().dueDate"
+            (ngModelChange)="updateDraft('dueDate', $event)"
+          />
+        </label>
+      </div>
+
+      <label>
+        <span>Tags</span>
+        <input
+          type="text"
+          name="tags"
+          placeholder="angular, portfolio, ui"
+          [ngModel]="draft().tags"
+          (ngModelChange)="updateDraft('tags', $event)"
+        />
+      </label>
+
+      <button class="primary-button" type="submit">
+        {{ editingId() ? 'Update task' : 'Add task' }}
+      </button>
+    </form>
+
+    <div class="task-board">
+      <div class="toolbar">
+        <label class="search">
+          <span>Search</span>
+          <input
+            type="search"
+            placeholder="Search title, notes, tags"
+            [ngModel]="searchTerm()"
+            (ngModelChange)="searchTerm.set($event)"
+          />
+        </label>
+
+        <div class="toolbar__row">
+          <label>
+            <span>Status</span>
+            <select [ngModel]="statusFilter()" (ngModelChange)="statusFilter.set($event)">
+              @for (filter of statusFilters; track filter.value) {
+                <option [value]="filter.value">{{ filter.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Priority</span>
+            <select [ngModel]="priorityFilter()" (ngModelChange)="priorityFilter.set($event)">
+              @for (priority of priorityOptions; track priority.value) {
+                <option [value]="priority.value">{{ priority.label }}</option>
+              }
+            </select>
+          </label>
+
+          <label>
+            <span>Sort</span>
+            <select [ngModel]="sortBy()" (ngModelChange)="sortBy.set($event)">
+              @for (sort of sortOptions; track sort.value) {
+                <option [value]="sort.value">{{ sort.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      </div>
+
+      @if (allTags().length) {
+        <div class="tag-filter" aria-label="Available tags">
+          @for (tag of allTags(); track tag) {
+            <button type="button" (click)="applyTag(tag)">#{{ tag }}</button>
+          }
+        </div>
+      }
+
+      <div class="task-list">
+        @for (todo of visibleTodos(); track trackTodo($index, todo)) {
+          <article
+            class="task-card"
+            [ngClass]="{
+              'task-card--done': todo.completed,
+              'task-card--overdue': isOverdue(todo)
+            }"
+          >
+            <div class="task-card__top">
+              <label class="check-control">
+                <input
+                  type="checkbox"
+                  [checked]="todo.completed"
+                  (change)="toggleTodo(todo.id)"
+                  [attr.aria-label]="'Toggle ' + todo.title"
+                />
+                <span></span>
+              </label>
+
+              <div>
+                <h2>{{ todo.title }}</h2>
+                @if (todo.description) {
+                  <p>{{ todo.description }}</p>
+                }
+              </div>
+            </div>
+
+            <div class="task-meta">
+              <span class="priority" [ngClass]="'priority--' + todo.priority">
+                {{ todo.priority }}
+              </span>
+
+              @if (todo.dueDate) {
+                <span [class.is-overdue]="isOverdue(todo)">
+                  Due {{ todo.dueDate | date: 'MMM d, y' }}
+                </span>
+              } @else {
+                <span>No due date</span>
+              }
+            </div>
+
+            @if (todo.tags.length) {
+              <div class="tags">
+                @for (tag of todo.tags; track tag) {
+                  <button type="button" (click)="applyTag(tag)">#{{ tag }}</button>
+                }
+              </div>
+            }
+
+            <div class="task-actions">
+              <button type="button" class="ghost-button" (click)="startEdit(todo)">Edit</button>
+              <button type="button" class="danger-button" (click)="deleteTodo(todo.id)">
+                Delete
+              </button>
+            </div>
+          </article>
+        } @empty {
+          <div class="empty-state">
+            <strong>No tasks match this view.</strong>
+            <p>Adjust the filters or create a new task to keep the board moving.</p>
+          </div>
+        }
+      </div>
+
+      @if (stats().completed) {
+        <button class="clear-button" type="button" (click)="clearCompleted()">
+          Clear completed tasks
+        </button>
+      }
+    </div>
+  </section>
+</main>
